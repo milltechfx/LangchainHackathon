@@ -54,9 +54,11 @@ control_tower/
   settings.py    MODEL from MODEL_NAME in the root .env; illustrative FX rates to GBP.
 agents.py               SUBMISSION: exports supervisor, kyc_agent, transaction_agent, regulatory_agent.
 control_tower.ipynb     SUBMISSION: the story step by step. Commit it WITHOUT outputs.
-portal/app.py + static/index.html   demo UI, four tabs. Dashboard: counts, Scan (screens the next new applications,
-                        monitors onboarded card clients), and one action queue for every human decision from every
-                        pillar (approve/reject, POST /api/action/{id}), plus a chat box to the supervisor (live only).
+portal/app.py + static/index.html   demo UI, four tabs. Dashboard: one summary card per part (KYC, transaction
+                        monitoring, regulatory change, our bank) that opens its tab, Scan (screens the next new
+                        applications, monitors onboarded card clients), and one queue for every human decision from
+                        every pillar, grouped as new accounts, onboarded clients and regulatory change (approve/reject,
+                        POST /api/action/{id}; the reasons fold away), plus a chat box to the supervisor (live only).
                         KYC (portal/kyc_tab.py + static/kyc.js/.css): the KYC process map with a count per stage,
                         a filterable case list, and a case file that walks each step of the map (application,
                         profile, screening, risk with paragraphs, approval, monitoring); watchlists folded away.

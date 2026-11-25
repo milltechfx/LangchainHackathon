@@ -25,9 +25,18 @@
   .view { display: none; } .view.on { display: grid; gap: 16px; }
   .g-dash { grid-template-columns: 1fr 380px; } .g-split { grid-template-columns: 1fr 1fr; } .g-kyc { grid-template-columns: 1.3fr 1fr; }
   @media (max-width: 1000px) { .g-dash, .g-split, .g-kyc { grid-template-columns: 1fr; } }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
-  .kpi b { display: block; font-size: 26px; line-height: 1.1; } .kpi span { color: var(--quiet); font-size: 12px; } .kpi.hot b { color: var(--warn); }
+  .cards { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+  .pcard { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 10px; }
+  .pcard:hover { border-color: var(--accent); }
+  .pc-kyc { border-top-color: var(--kyc); } .pc-tm { border-top-color: var(--tm); } .pc-reg { border-top-color: var(--reg); } .pc-bank { border-top-color: var(--accent); }
+  .pc-head { display: flex; align-items: center; gap: 8px; } .pc-head b { font-size: 14px; }
+  .pc-wait { font-size: 11px; font-weight: 700; background: var(--warn); color: #3a2a00; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  .pc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .pc-stats b { display: block; font-size: 22px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .pc-stats b.txt { font-size: 15px; line-height: 1.7; }
+  .pc-stats span { color: var(--quiet); font-size: 11.5px; } .pc-stats .hot b { color: var(--warn); }
+  .q-group { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--quiet); margin: 14px 0 6px; } .q-group:first-child { margin-top: 0; }
+  .action .line { margin: 4px 0 8px; font-size: 13px; } .action details { margin: 0 0 8px; font-size: 12.5px; }
+  .action summary { cursor: pointer; color: var(--accent); font-size: 12px; } .action details > *:not(summary) { margin-top: 8px; }
   .scan { background: var(--accent); color: #06203f; border: 0; border-radius: 8px; padding: 8px 16px; font: inherit; font-weight: 700; cursor: pointer; }
   .scan:disabled { opacity: .5; cursor: wait; }
   .action { background: var(--panel2); border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
@@ -205,12 +214,12 @@
   <div id="err" class="err" style="margin-bottom:8px"></div>
 
   <section class="view g-dash" id="v-dash">
+    <div class="cards" id="cards"></div>
     <div class="col">
-      <div class="kpis" id="kpis"></div>
       <div class="panel">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-          <h2 style="margin:0">Actions waiting for you</h2><span class="spacer"></span>
-          <span class="meta">Scan screens new applications and monitors onboarded clients' payments</span>
+          <h2 style="margin:0">Decisions waiting for you</h2><span class="spacer"></span>
+          <span class="meta">Scan looks for new applications and payments to monitor</span>
           <button class="scan" id="scan" onclick="post('/api/scan')">Scan</button>
         </div>
         <div id="actions" class="empty">Nothing waiting. Press Scan to look for new work.</div>
@@ -219,10 +228,10 @@
     <div class="col">
       <div class="panel">
         <h2>Ask the control tower</h2>
-        <div id="chat" class="chat"><div class="empty">Ask the supervisor about any client or regulation, for example "Where is Tomás Ferreira (CUST-026) and what is next?" or "Which clients does PS26-7 affect?" It explains and prepares; decisions are made in the action queue.</div></div>
+        <div id="chat" class="chat"><div class="empty">Ask the supervisor about any client or regulation, for example "Where is Tomás Ferreira (CUST-026) and what is next?" It explains and prepares; decisions are made in the queue.</div></div>
         <form class="ask" onsubmit="ask(event)"><input id="q" placeholder="Ask about a client or a regulation" autocomplete="off"><button id="send">Ask</button></form>
       </div>
-      <div class="panel"><h2>Activity</h2><div id="feed" class="feed"></div></div>
+      <details class="panel"><summary>Activity</summary><div id="feed" class="feed" style="margin-top:10px"></div></details>
     </div>
   </section>
 
@@ -394,20 +403,14 @@ function renderReview(rv, compact) {
   </div>`;
 }
 
-function renderRegAction(a) {
+function regDetail(a) {
   const signOff = a.journey === "sign_off";
   const banner = signOff
     ? `<div class="rv-journey off"><b>Sign-off only.</b> This brief changes no KYC or monitoring control. Signing off records that the bank has reviewed it; the actions below go to their owners.</div>`
     : `<div class="rv-journey on"><b>Control change.</b> The tower found ${a.changes.length} gap(s) between the bank's live controls and what the document requires. Nothing changes until you approve.</div>`;
   const table = !signOff && a.changes.length ? `<table class="rv-changes"><thead><tr><th>Control</th><th>Today</th><th>Required</th><th>¶</th></tr></thead><tbody>${a.changes.map(c =>
       `<tr><td>${esc(fieldNames[c.field] || words(c.field))}</td><td class="meta">${esc(fmt(c.before))}</td><td><b>${esc(fmt(c.after))}</b></td><td class="b-src">${esc(c.paragraph)}</td></tr>`).join("")}</tbody></table>` : "";
-  return `<div class="action reg-action"><div class="top"><span class="pill p-reg">REG</span><b>${esc(a.kind)}</b>
-      <span class="subj">${esc(a.subject)}${a.review && a.review.title ? ` · <span class="meta">${esc(a.review.title)}</span>` : ""}</span>
-      <span class="spacer"></span><span class="meta">${esc(a.id)}</span></div>
-    ${banner}${table}${renderReview(a.review, true)}
-    <div class="row"><input id="note-${esc(a.id)}" placeholder="Reviewer note (optional)">
-      <button class="btn ok" onclick="decide('${esc(a.id)}','approve')">${esc(a.approve_label)}</button>
-      <button class="btn no" onclick="decide('${esc(a.id)}','reject')">${esc(a.reject_label)}</button></div></div>`;
+  return banner + table + renderReview(a.review, true);
 }
 
 // --- Our bank: everything the agents know about the bank, read-only -------------------------------------------
@@ -440,19 +443,60 @@ async function loadBank() {
       <td>${d.journey === "sign_off" ? "Sign-off only" : d.journey ? "Control change" : "–"}</td><td>${esc(d.impact || "–")}</td><td class="b-due">${esc(d.effective_date || "–")}</td></tr>`).join("")}</tbody></table>`);
 }
 
+// --- Dashboard: one card per part of the application, and one queue for every human decision -------------------
+const openActions = new Set();
+function openTab(a) { if (a.pillar === "kyc" && a.customer_id) return pick(a.customer_id); if (a.pillar === "reg") $("#doc").value = a.subject; show(a.pillar); }
 function renderAction(a) {
-  if (a.pillar === "reg" && a.journey) return renderRegAction(a);
-  return `<div class="action"><div class="top"><span class="pill p-${esc(a.pillar)}">${esc(a.pillar.toUpperCase())}</span><b>${esc(a.kind)}</b>
-      <span class="subj">${a.customer_id ? `<a href="#" onclick="pick('${esc(a.customer_id)}');return false">${esc(a.subject)}</a>` : esc(a.subject)}</span>
-      <span class="spacer"></span><span class="meta">${esc(a.id)}</span></div>
-    <div>${esc(a.question)}</div>
-    <ul>${a.detail.map(d => `<li>${esc(fieldNames[d.split(":")[0]] ? d.replace(d.split(":")[0], fieldNames[d.split(":")[0]]) : d)}</li>`).join("")}</ul>
+  const reg = a.pillar === "reg" && a.journey, r = reg && a.review && a.review.review;
+  const named = d => fieldNames[d.split(":")[0]] ? d.replace(d.split(":")[0], fieldNames[d.split(":")[0]]) : d;
+  const line = reg ? (a.journey === "sign_off" ? "Sign off this brief. It changes no KYC or monitoring control."
+                                               : `Approve ${a.changes.length} control change${a.changes.length === 1 ? "" : "s"} for the bank's clients.`)
+                     + (r ? ` <span class="meta">${esc(r.classification)} · ${esc(r.impact)} impact${r.effective_date ? " · in force " + esc(r.effective_date) : ""}</span>` : "")
+                   : esc(a.question.split("?")[0] + "?")   // the agents' own prompt carries reply instructions after the question
+                     + ((a.detail[0] || "").startsWith("Agent suggests") ? ` <span class="meta">${esc(a.detail[0].split(":")[0])}</span>` : "");
+  const more = reg ? regDetail(a) : a.detail.length ? `<ul>${a.detail.map(d => `<li>${esc(named(d))}</li>`).join("")}</ul>` : "";
+  const tabName = {kyc: "KYC", tm: "Transaction monitoring", reg: "Regulatory change"}[a.pillar];
+  return `<div class="action ${reg ? "reg-action" : ""}"><div class="top"><span class="pill p-${esc(a.pillar)}">${esc(a.pillar.toUpperCase())}</span><b>${esc(a.kind)}</b>
+      <span class="subj">${esc(a.subject)}${reg && a.review.title ? ` · <span class="meta">${esc(a.review.title)}</span>` : ""}</span>
+      <span class="spacer"></span><a href="#" class="meta" onclick='openTab(${esc(JSON.stringify({pillar: a.pillar, customer_id: a.customer_id, subject: a.subject}))});return false'>Open in ${tabName}</a></div>
+    <div class="line">${line}</div>
+    ${more ? `<details ${openActions.has(a.id) ? "open" : ""} ontoggle="this.open ? openActions.add('${esc(a.id)}') : openActions.delete('${esc(a.id)}')"><summary>Why${reg ? "" : ` (${a.detail.length})`}</summary>${more}</details>` : ""}
     <div class="row"><input id="note-${esc(a.id)}" placeholder="Reviewer note (optional)">
-      <button class="btn ok" onclick="decide('${esc(a.id)}','approve')">Approve</button>
-      ${a.reject ? `<button class="btn no" onclick="decide('${esc(a.id)}','${esc(a.reject)}')">${a.reject === "block" ? "Block" : "Reject"}</button>` : ""}</div></div>`;
+      <button class="btn ok" onclick="decide('${esc(a.id)}','approve')">${esc(a.approve_label || "Approve")}</button>
+      ${a.reject ? `<button class="btn no" onclick="decide('${esc(a.id)}','${esc(a.reject)}')">${esc(a.reject_label || (a.reject === "block" ? "Block" : "Reject"))}</button>` : ""}</div></div>`;
 }
-
-
+function renderQueue() {
+  const A = state.actions;
+  if (!A.length) return '<div class="empty">Nothing waiting. Press Scan to look for new work.</div>';
+  const groups = [["New accounts", A.filter(a => a.kind === "New account")],
+                  ["Onboarded clients", A.filter(a => a.pillar !== "reg" && a.kind !== "New account")],
+                  ["Regulatory change", A.filter(a => a.pillar === "reg")]];
+  return groups.filter(g => g[1].length).map(([title, list]) => `<div class="q-group">${title} · ${list.length}</div>${list.map(renderAction).join("")}`).join("");
+}
+function renderCards() {
+  const k = state.kpis, A = state.actions, cc = state.card_clients, waiting = p => A.filter(a => a.pillar === p).length;
+  const alerts = cc.reduce((n, c) => n + c.alerts.length, 0);
+  const rated = r => state.clients.filter(c => c.onboarded && c.rating === r).length;
+  const m = cc.map(c => c.metrics || {}).reduce((a, x) => { for (const f in x) a[f] = (a[f] || 0) + x[f]; return a; }, {});
+  const stat = ([v, label, hot, txt]) => `<div class="${hot && v ? "hot" : ""}"><b class="${txt ? "txt" : ""}">${esc(v)}</b><span>${label}</span></div>`;
+  const card = (cls, to, title, badge, stats, foot) => `<div class="pcard pc-${cls}" onclick="show('${to}')">
+      <div class="pc-head"><b>${title}</b><span class="spacer"></span>${badge ? `<span class="pc-wait">${badge}</span>` : '<span class="meta">nothing waiting</span>'}</div>
+      <div class="pc-stats">${stats.map(stat).join("")}</div><div class="meta">${foot}</div></div>`;
+  const wait = n => n ? `${n} waiting for you` : "";
+  const b = bank;
+  return card("kyc", "kyc", "KYC", wait(waiting("kyc")),
+      [[k.new_applications, "new applications", true], [k.onboarded, "onboarded"], [k.refresh_or_reassess, "refresh or re-assess due", true]],
+      k.onboarded ? `Onboarded by rating: ${rated("low")} low, ${rated("medium")} medium, ${rated("high")} high${k.rejected ? ` · ${k.rejected} rejected` : ""}` : "No client screened yet")
+    + card("tm", "tm", "Transaction monitoring", wait(waiting("tm")),
+      [[k.payments_for_review, "payments for review", true], [k.monitoring_due, "clients due monitoring", true], [alerts, "alerts raised"]],
+      m.decided ? `${m.decided} payments decided, ${m.by_rules || 0} by the rules alone · ${m.reached_human || 0} of ${m.needs_human || 0} medium or high reached a person` : `${cc.length} card clients, none monitored yet`)
+    + card("reg", "reg", "Regulatory change", wait(waiting("reg")),
+      [[state.policy.source_document, "live policy", false, true], [`${Object.keys(state.briefs || {}).length}/${state.documents.length}`, "documents briefed"], [state.affected.length, "clients out of date", true]],
+      state.policy_changes.length ? `${state.policy_changes.length} controls changed from the defaults` : "Default controls in force")
+    + card("bank", "bank", "Our bank", b && b.gaps.length ? `${b.gaps.length} gap${b.gaps.length === 1 ? "" : "s"} in records` : "",
+      b ? [[b.business_services.filter(x => x.important).length, "important services"], [b.contracts.length, "third-party contracts"], [b.senior_managers.filter(x => !x.name).length, "roles not named", true]] : [["…", "loading"]],
+      b ? `${esc(b.firm.name)} · ${Number(b.firm.customers).toLocaleString()} customers` : "");
+}
 
 // --- Transaction monitoring tab: rules triage in code, investigator and auditor models, a person for every alert ---
 let tmOpen = new Set((() => { try { return JSON.parse(localStorage.getItem("tmOpen") || "[]"); } catch { return []; } })());
@@ -602,15 +646,13 @@ async function poll() {
   $("#scan").disabled = $("#brief").disabled = busy;
   $("#n-dash").hidden = !state.actions.length; $("#n-dash").textContent = state.actions.length;
 
-  const tile = (n, label, to, hot) => `<div class="kpi ${hot && n ? "hot" : ""}" onclick="show('${to}')"><b>${n}</b><span>${label}</span></div>`;
-  paint("#kpis", JSON.stringify([k, state.policy.source_document]), tile(k.awaiting_decision, "Actions waiting for you", "dash", true) + tile(k.new_applications, "New applications to screen", "kyc", true)
-    + tile(k.onboarded, "Onboarded clients", "kyc") + tile(k.refresh_or_reassess, "Refresh or re-assessment due", "dash", true)
-    + tile(k.payments_for_review, "Payments for review", "tm", true) + tile(k.monitoring_due, "Clients due monitoring", "tm", true)
-    + `<div class="kpi" onclick="show('reg')"><b style="font-size:18px;line-height:1.6">${esc(state.policy.source_document)}</b><span>Live policy</span></div>`);
-  paint("#actions", JSON.stringify(state.actions), state.actions.length ? state.actions.map(renderAction).join("") : '<div class="empty">Nothing waiting. Press Scan to look for new work.</div>');
+  // The bank view feeds a dashboard card: load it once, then again whenever the regulatory picture changes.
+  const bankKey = JSON.stringify([state.policy.source_document, Object.keys(state.briefs || {}), state.actions.filter(a => a.pillar === "reg").map(a => a.id), state.clients.map(c => c.stage)]);
+  if (tab === "bank" || bankKey !== shown.bankKey) { shown.bankKey = bankKey; await loadBank().catch(e => { $("#err").textContent = "Could not load the bank view: " + e; }); }
+  paint("#cards", JSON.stringify([k, state.policy.source_document, state.actions.map(a => a.id), state.affected.length, Object.keys(state.briefs || {}), state.card_clients.map(c => [c.alerts.length, c.metrics]), bank && [bank.gaps, bank.contracts.length]]), renderCards());
+  paint("#actions", JSON.stringify(state.actions), renderQueue());
 
   kycRender();
-  if (tab === "bank") loadBank().catch(e => { $("#err").textContent = "Could not load the bank view: " + e; });
   paint("#tm-flow", "flow", renderFlow());
   paint("#tm-rules", JSON.stringify([ruleSetShown, state.policy]), renderRuleSets());
   paint("#tm-metrics", JSON.stringify(state.card_clients.map(c => c.metrics)), renderTmMetrics());
